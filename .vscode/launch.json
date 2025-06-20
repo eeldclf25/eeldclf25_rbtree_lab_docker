@@ -6,6 +6,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/rbtree_lab/test/test-rbtree",
+            //"program": "${workspaceFolder}/rbtree_lab/src/driver",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/rbtree_lab/test",
