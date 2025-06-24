@@ -88,7 +88,7 @@ node_t *rbtree_insert(rbtree *t, const key_t key)
   new_node->right = t->nil;
   new_node->parent = t->nil;
 
-  //1. BST 노드 삽입-------------------------------------------------------------------------------------------------------------------------------
+  //1. BST 노드 삽입 액션-------------------------------------------------------------------------------------------------------------------------------
   node_t **insert_node = &t->root;  // 노드를 담은 포인터의 포인터를 생성
   node_t **insert_parent_node = &t->nil;
   while (*insert_node != t->nil) {
@@ -98,20 +98,20 @@ node_t *rbtree_insert(rbtree *t, const key_t key)
   *insert_node = new_node;  // 이중포인터를 이용하면 우리가 넣어야 할 위치의 "공간"을 while문 하나로 찾을 수 있음
   new_node->parent = *insert_parent_node;
 
-  //2. RB트리의 균형 조정-------------------------------------------------------------------------------------------------------------------------------
-  node_t *check_node = new_node;  // 새로 넣은 노드(맨 아래)에서부터 트리 균형 맞추기 시작
+  //2. RB트리의 삽입 균형 조정-------------------------------------------------------------------------------------------------------------------------------
+  node_t *check_node = new_node;  // 새로 넣은 노드에서부터 트리 균형 맞추기 시작
   node_t *check_parent_node = check_node->parent;
   node_t *check_grand_node = check_parent_node->parent;
   while (check_parent_node->color == RBTREE_RED) {  // 삽입에서의 균형 기준은, 부모가 Red여서 Red to Red가 되는 경우에만 계속 균형을 맞춰주면 됨
-    if (check_grand_node->left->color == RBTREE_RED && check_grand_node->right->color == RBTREE_RED) {
-      check_grand_node->color = RBTREE_RED; // 부모 및 삼촌이 Red이고 할아버지가 Black일 경우, 이를 부모 및 삼촌을 Black, 할아버지를 Red로 바꿔도 Black Height를 유지할 수 있게 됨
+    if (check_grand_node->left->color == RBTREE_RED && check_grand_node->right->color == RBTREE_RED) {  // 부모 및 삼촌이 Red이고 할아버지가 Black일 경우,
+      check_grand_node->color = RBTREE_RED; // 부모 및 삼촌을 Black, 할아버지를 Red로 바꿔도 Black Height를 유지할 수 있게 됨
       check_grand_node->left->color = RBTREE_BLACK;
       check_grand_node->right->color = RBTREE_BLACK;
-      check_node = check_grand_node;  // 유일하게 회전없이 할아버지 노드 그대로 Red로 만들어서 Red to Red 가능성이 있기 때문에 반복해야 함
+      check_node = check_grand_node;  // 회전없이 할아버지 노드 그대로 Red로 만들어서 Red to Red 가능성이 생겼기 때문에 반복해야 함
       check_parent_node = check_grand_node->parent;
       check_grand_node = check_grand_node->parent->parent;
     }
-    else {  // 삼촌이 아닌 부모만 Red일 경우, 회전을 이용하여 Black Height를 유지하면서 Red to Red가 안되기 때문에 한번만 수행하면 됨
+    else {  // 삼촌이 아닌 부모만 Red일 경우, 회전을 이용하면 Black Height를 유지하면서 Red to Red를 없앨 수 있기 때문에 한번만 수행하면 됨
       if (check_grand_node->left == check_parent_node) {
         if (check_parent_node->right == check_node)
           left_rotate(t, check_parent_node);
@@ -173,54 +173,31 @@ int rbtree_erase(rbtree *t, node_t *p)
   node_t *delete_node = p;
   node_t *extra_node = NULL;
 
-  //1. 삭제-------------------------------------------------------------------------------------------------------------------------------
-  if (delete_node->right != t->nil && delete_node->left != t->nil) {
-    node_t *temp = rbnode_min_max(t, delete_node->left, false);
+  //1. BST 노드 삭제 액션-------------------------------------------------------------------------------------------------------------------------------
+  if (delete_node->right != t->nil && delete_node->left != t->nil) {  // 삭제할 노드의 자녀가 두개인 경우,
+    node_t *temp = rbnode_min_max(t, delete_node->left, false); // 삭제할 노드에 predecessor노드의 값을 복사하고
     delete_node->key = temp->key;
-    delete_node = temp;
+    delete_node = temp; //값을 복사했으니까 predecessor노드에서 삭제 진행
   }
   if (delete_node->right != t->nil) {
     extra_node = delete_node->right;
     delete_node->right->parent = delete_node->parent;
-    if (delete_node->parent->right == delete_node) {
-      delete_node->parent->right = delete_node->right;
-    }
-    else if (delete_node->parent->left == delete_node) {
-      delete_node->parent->left = delete_node->right;
-    }
-    else {
-      t->root = delete_node->right;
-    }
   }
   else if (delete_node->left != t->nil) {
     extra_node = delete_node->left;
     delete_node->left->parent = delete_node->parent;
-    if (delete_node->parent->right == delete_node) {
-      delete_node->parent->right = delete_node->left;
-    }
-    else if (delete_node->parent->left == delete_node) {
-      delete_node->parent->left = delete_node->left;
-    }
-    else {
-      t->root = delete_node->left;
-    }
   }
-  else if (delete_node->left == t->nil && delete_node->right == t->nil) {
-    if (delete_node->parent->left == delete_node) {
-      delete_node->parent->left = t->nil;
-      t->nil->parent = delete_node->parent;
-      extra_node = t->nil;
-    }
-    else if (delete_node->parent->right == delete_node) {
-      delete_node->parent->right = t->nil;
-      t->nil->parent = delete_node->parent;
-      extra_node = t->nil;
-    }
-    else {
-      t->root = t->nil;
-      extra_node = t->nil;
-    }
+  else {  // 남은 경우의 수는, 삭제할 노드 두개 다 nil일 경우
+    extra_node = t->nil;  // extra black이 될 수있는 노드를 지목 (nil 임)
+    t->nil->parent = delete_node->parent; // nil의 부모를 잠깐 수정하는 코드인데, 이를 통해 이 함수 안에서만 잠깐 nil이 부모를 가지게 됨. (이를 통해 불편하게 이중 포인터를 사용하지 않으면서 nil을 extra black으로 지정할 수 있게 됨)
   }
+  
+  if (delete_node->parent->right == delete_node)
+    delete_node->parent->right = extra_node;
+  else if (delete_node->parent->left == delete_node)
+    delete_node->parent->left = extra_node;
+  else
+    t->root = extra_node;
 
 
   if (delete_node->color != RBTREE_RED) {
@@ -290,7 +267,7 @@ int rbtree_erase(rbtree *t, node_t *p)
 
   extra_node->color = RBTREE_BLACK;
   t->root->color = RBTREE_BLACK;
-  t->nil->parent = t->nil;
+  t->nil->parent = t->nil;  // 편의를 위해 잠깐 훼손한 nil->parent를 다시 복구
   free(delete_node);
   return 0;
 }
