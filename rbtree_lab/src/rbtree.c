@@ -157,14 +157,12 @@ node_t *rbnode_min_max(const rbtree *t, node_t *p, bool is_min)
 
 node_t *rbtree_min(const rbtree *t)
 {
-  node_t *return_node = rbnode_min_max(t, t->root, true);
-  return return_node;
+  return rbnode_min_max(t, t->root, true);
 }
 
 node_t *rbtree_max(const rbtree *t)
 {
-  node_t *return_node = rbnode_min_max(t, t->root, false);
-  return return_node;
+  return rbnode_min_max(t, t->root, false);
 }
 
 int rbtree_erase(rbtree *t, node_t *p)
@@ -175,96 +173,74 @@ int rbtree_erase(rbtree *t, node_t *p)
 
   //1. BST 노드 삭제 액션-------------------------------------------------------------------------------------------------------------------------------
   if (delete_node->right != t->nil && delete_node->left != t->nil) {  // 삭제할 노드의 자녀가 두개인 경우,
-    node_t *temp = rbnode_min_max(t, delete_node->left, false); // 삭제할 노드에 predecessor노드의 값을 복사하고
-    delete_node->key = temp->key;
-    delete_node = temp; //값을 복사했으니까 predecessor노드에서 삭제 진행
+    node_t *predecessor = rbnode_min_max(t, delete_node->left, false); // 삭제할 노드에 predecessor노드의 값을 복사하고
+    delete_node->key = predecessor->key;
+    delete_node = predecessor; //값을 복사했으니까 predecessor노드에서 삭제 진행
   }
-  if (delete_node->right != t->nil) {
-    extra_node = delete_node->right;
-    delete_node->right->parent = delete_node->parent;
+
+  if (delete_node->right != t->nil || delete_node->left != t->nil) {  // 삭제할 노드의 자식이 하나라도 있는 경우
+    extra_node = (delete_node->right != t->nil) ? delete_node->right : delete_node->left;
+    extra_node->parent = delete_node->parent;
   }
-  else if (delete_node->left != t->nil) {
-    extra_node = delete_node->left;
-    delete_node->left->parent = delete_node->parent;
-  }
-  else {  // 남은 경우의 수는, 삭제할 노드 두개 다 nil일 경우
+  else {  // 남은 경우의 수는, 삭제할 노드의 자녀 두개 다 nil일 경우
     extra_node = t->nil;  // extra black이 될 수있는 노드를 지목 (nil 임)
     t->nil->parent = delete_node->parent; // nil의 부모를 잠깐 수정하는 코드인데, 이를 통해 이 함수 안에서만 잠깐 nil이 부모를 가지게 됨. (이를 통해 불편하게 이중 포인터를 사용하지 않으면서 nil을 extra black으로 지정할 수 있게 됨)
   }
-  
-  if (delete_node->parent->right == delete_node)
+
+  if (delete_node->parent->right == delete_node)  // 삭제할 노드의 부모 left, right를 extra_node와 연결 
     delete_node->parent->right = extra_node;
   else if (delete_node->parent->left == delete_node)
     delete_node->parent->left = extra_node;
   else
     t->root = extra_node;
-
-
-  if (delete_node->color != RBTREE_RED) {
+  
+  //2. RB트리의 삭제 균형 조정-------------------------------------------------------------------------------------------------------------------------------
+  if (delete_node->color == RBTREE_BLACK) {
     while (extra_node != t->root && extra_node->color == RBTREE_BLACK) {
+      bool extra_is_left = (extra_node->parent->left == extra_node) ? true : false;
       node_t *extra_parent_node = extra_node->parent;
       node_t *extra_brother_node = (extra_parent_node->left == extra_node) ? extra_parent_node->right : extra_parent_node->left;
-
-      if (extra_brother_node->color == RBTREE_BLACK
-      && extra_brother_node->left->color == RBTREE_BLACK
-      && extra_brother_node->right->color == RBTREE_BLACK) {
+      node_t *extra_brther_child_near = (extra_is_left) ? extra_brother_node->left : extra_brother_node->right;
+      node_t *extra_brther_child_far = (extra_is_left) ? extra_brother_node->right : extra_brother_node->left;
+      
+      // Case2의 경우, brother노드를 Red to Black으로 만들면, 결국 extra_node의 부모를 doubly black으로 만들 수 있게 된다
+      if (extra_brother_node->color == RBTREE_BLACK && extra_brther_child_far->color == RBTREE_BLACK && extra_brther_child_near->color == RBTREE_BLACK) {
         extra_brother_node->color = RBTREE_RED;
         extra_node = extra_node->parent;
       }
-      else {
-        if (extra_parent_node->left == extra_node) {
-          if (extra_brother_node->color == RBTREE_RED
-          && extra_brother_node->left->color == RBTREE_BLACK
-          && extra_brother_node->right->color == RBTREE_BLACK) {
-            extra_parent_node->color = RBTREE_RED;
-            extra_brother_node->color = RBTREE_BLACK;
-            left_rotate(t, extra_parent_node);
-          }
-          else if (extra_brother_node->color == RBTREE_BLACK
-          && extra_brother_node->left->color == RBTREE_RED
-          && extra_brother_node->right->color == RBTREE_BLACK) {
-            extra_brother_node->color = RBTREE_RED;
-            extra_brother_node->left->color = RBTREE_BLACK;
-            right_rotate(t, extra_brother_node);
-          }
-          else if (extra_brother_node->color == RBTREE_BLACK
-          && extra_brother_node->right->color == RBTREE_RED) {
-            extra_brother_node->color = extra_parent_node->color;
-            extra_parent_node->color = RBTREE_BLACK;
-            extra_brother_node->right->color = RBTREE_BLACK;
-            left_rotate(t, extra_parent_node);
-            break;
-          }
-        }
-        else {
-          if (extra_brother_node->color == RBTREE_RED
-          && extra_brother_node->left->color == RBTREE_BLACK
-          && extra_brother_node->right->color == RBTREE_BLACK) {
-            extra_parent_node->color = RBTREE_RED;
-            extra_brother_node->color = RBTREE_BLACK;
-            right_rotate(t, extra_parent_node);
-          }
-          else if (extra_brother_node->color == RBTREE_BLACK
-          && extra_brother_node->left->color == RBTREE_BLACK
-          && extra_brother_node->right->color == RBTREE_RED) {
-            extra_brother_node->color = RBTREE_RED;
-            extra_brother_node->right->color = RBTREE_BLACK;
-            left_rotate(t, extra_brother_node);
-          }
-          else if (extra_brother_node->color == RBTREE_BLACK
-          && extra_brother_node->left->color == RBTREE_RED) {
-            extra_brother_node->color = extra_parent_node->color;
-            extra_parent_node->color = RBTREE_BLACK;
-            extra_brother_node->left->color = RBTREE_BLACK;
-            right_rotate(t, extra_parent_node);
-            break;
-          }
-        }
+      // Case1의 경우, brother노드를 Black으로 바꾸면 Case2, 3, 4로 귀결되게 된다
+      else if (extra_brother_node->color == RBTREE_RED && extra_brther_child_far->color == RBTREE_BLACK && extra_brther_child_near->color == RBTREE_BLACK) {
+        extra_brother_node->color = RBTREE_BLACK;
+        extra_parent_node->color = RBTREE_RED;
+        if (extra_is_left)
+          left_rotate(t, extra_parent_node);
+        else
+          right_rotate(t, extra_parent_node);
+      }
+      // Case3의 경우, brother노드를 회전하고 RB트리 색배치를 하게 되면, 구조상 Case4와 같은 상황이 된다
+      else if (extra_brother_node->color == RBTREE_BLACK && extra_brther_child_far->color == RBTREE_BLACK && extra_brther_child_near->color == RBTREE_RED) {
+        extra_brother_node->color = RBTREE_RED;
+        extra_brther_child_near->color = RBTREE_BLACK;
+        if (extra_is_left)
+          right_rotate(t, extra_brother_node);
+        else
+          left_rotate(t, extra_brother_node);
+      }
+      // Case4의 경우에서 doubly black을 해결하면서 RB트리의 균형도 완료하므로 break
+      else if (extra_brother_node->color == RBTREE_BLACK && extra_brther_child_far->color == RBTREE_RED) {
+        extra_brother_node->color = extra_parent_node->color;
+        extra_parent_node->color = RBTREE_BLACK;
+        extra_brther_child_far->color = RBTREE_BLACK;
+        if (extra_is_left)
+          left_rotate(t, extra_parent_node);
+        else
+          right_rotate(t, extra_parent_node);
+        break;
       }
     }
   }
 
-
+  //3. 마지막 재색칠 작업-------------------------------------------------------------------------------------------------------------------------------
   extra_node->color = RBTREE_BLACK;
   t->root->color = RBTREE_BLACK;
   t->nil->parent = t->nil;  // 편의를 위해 잠깐 훼손한 nil->parent를 다시 복구
